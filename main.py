@@ -1,3 +1,5 @@
+# main.py
+
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,7 +11,8 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import classification_report, confusion_matrix
 
 from dataset import (
-    load_classification, split_data, load_segmentation,
+    load_classification, split_data,
+    load_segmentation, load_ulcer_segmentation, split_segmentation,
     UlcerDataset, SegmentationDataset, get_transforms, CLASS_NAMES
 )
 from models import Classifier, UNet
@@ -25,15 +28,18 @@ BATCH_SIZE         = 8
 EPOCHS_CLF_PHASE1  = 10
 EPOCHS_CLF_PHASE2  = 20
 EPOCHS_SEG         = 15
+EPOCHS_SEG_FINETUNE = 20
 LR_HEAD            = 3e-4
 LR_BACKBONE        = 3e-5
 LR_SEG             = 3e-4
+LR_SEG_FINETUNE    = 5e-5
 SEG_THRESHOLD      = 0.3
 LABEL_SMOOTHING    = 0.1
 
-CLASSIFICATION_DATASET = "Datasets/UlcereClassification"
-SEG_TRAIN_DIR          = "Datasets/FootSegmentation/train"
-SEG_VAL_DIR            = "Datasets/FootSegmentation/validation"
+CLASSIFICATION_DATASET  = "Datasets/UlcereClassification"
+SEG_TRAIN_DIR           = "Datasets/FootSegmentation/train"
+SEG_VAL_DIR             = "Datasets/FootSegmentation/validation"
+ULCER_SEG_DIR           = "Datasets/UlcereSegmentation"
 
 
 # =========================================================
@@ -168,6 +174,128 @@ plt.show()
 
 
 # =========================================================
+# PART 1b — FINE-TUNING SEGMENTATION SUR ULCÈRES
+# =========================================================
+
+print("\n==============================")
+print("SEGMENTATION FINE-TUNING (ulcères)")
+print("==============================\n")
+
+ulcer_imgs, ulcer_masks = load_ulcer_segmentation(ULCER_SEG_DIR)
+ft_train_imgs, ft_train_masks, ft_val_imgs, ft_val_masks = split_segmentation(
+    ulcer_imgs, ulcer_masks, val_ratio=0.15
+)
+
+ft_train_ds = SegmentationDataset(ft_train_imgs, ft_train_masks, transform=train_tf)
+ft_val_ds   = SegmentationDataset(ft_val_imgs,   ft_val_masks,   transform=val_tf)
+
+ft_batch        = min(4, len(ft_train_ds))
+ft_train_loader = DataLoader(ft_train_ds, batch_size=ft_batch, shuffle=True)
+ft_val_loader   = DataLoader(ft_val_ds,   batch_size=ft_batch)
+
+# Repart du meilleur checkpoint pieds
+seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
+
+# lr très faible pour ne pas effacer ce qui a été appris sur les pieds
+optimizer_ft = torch.optim.Adam(seg_model.parameters(), lr=LR_SEG_FINETUNE)
+scheduler_ft = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer_ft, mode="min", factor=0.5, patience=4
+)
+
+ft_train_losses, ft_val_losses = [], []
+best_ft_loss = float("inf")
+
+for epoch in range(EPOCHS_SEG_FINETUNE):
+    seg_model.train()
+    running_loss = 0
+    for images, masks in ft_train_loader:
+        images, masks = images.to(DEVICE), masks.to(DEVICE)
+        optimizer_ft.zero_grad()
+        out  = seg_model(images)
+        loss = 0.5 * bce_loss(out, masks) + 0.5 * dice_loss(out, masks)
+        loss.backward()
+        optimizer_ft.step()
+        running_loss += loss.item()
+    train_loss = running_loss / len(ft_train_loader)
+
+    seg_model.eval()
+    running_val = 0
+    with torch.no_grad():
+        for images, masks in ft_val_loader:
+            images, masks = images.to(DEVICE), masks.to(DEVICE)
+            out = seg_model(images)
+            running_val += (0.5 * bce_loss(out, masks) + 0.5 * dice_loss(out, masks)).item()
+    val_loss = running_val / len(ft_val_loader)
+
+    scheduler_ft.step(val_loss)
+    ft_train_losses.append(train_loss)
+    ft_val_losses.append(val_loss)
+
+    if val_loss < best_ft_loss:
+        best_ft_loss = val_loss
+        torch.save(seg_model.state_dict(), "best_segmentation_model.pth")
+        print("Best fine-tuned seg model saved.")
+
+    print(f"  [FT] Epoch {epoch+1}/{EPOCHS_SEG_FINETUNE} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_ft.param_groups[0]['lr']:.7f}")
+
+
+# =========================================================
+# FIGURE 1bis — Courbe fine-tuning segmentation ulcères
+# =========================================================
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(ft_train_losses, label="Train", color="#2196F3", linewidth=2)
+ax.plot(ft_val_losses,   label="Val",   color="#FF5722", linewidth=2, linestyle="--")
+ax.set_title("Fine-tuning segmentation — ulcères (BCE + Dice)", fontsize=12, fontweight="bold")
+ax.set_xlabel("Epoch")
+ax.set_ylabel("Loss")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.savefig("fig1b_seg_finetune_loss.png", dpi=150)
+plt.show()
+
+
+# =========================================================
+# FIGURE 2bis — Exemples de segmentation sur ulcères (val FT)
+# =========================================================
+seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
+seg_model.eval()
+
+n_ulcer_ex = min(3, len(ft_val_ds))
+ulcer_idxs = random.sample(range(len(ft_val_ds)), n_ulcer_ex)
+
+fig, axes = plt.subplots(n_ulcer_ex, 3, figsize=(9, 3.0 * n_ulcer_ex))
+if n_ulcer_ex == 1:
+    axes = np.expand_dims(axes, 0)
+fig.suptitle("Segmentation fine-tunée — Exemples sur ulcères",
+             fontsize=12, fontweight="bold", y=1.01)
+
+axes[0, 0].set_title("Image originale",          fontsize=9, pad=6)
+axes[0, 1].set_title("Masque prédit (overlay)",  fontsize=9, pad=6)
+axes[0, 2].set_title("Ground truth",             fontsize=9, pad=6)
+
+for row, idx in enumerate(ulcer_idxs):
+    img_t, mask_t = ft_val_ds[idx]
+    with torch.no_grad():
+        prob = torch.sigmoid(
+            seg_model(img_t.unsqueeze(0).to(DEVICE))
+        ).squeeze().cpu().numpy()
+    img_np = denormalize(img_t)
+
+    axes[row, 0].imshow(img_np)
+    axes[row, 0].axis("off")
+    axes[row, 1].imshow(img_np)
+    axes[row, 1].imshow(prob, cmap="hot", alpha=0.5, vmin=0, vmax=1)
+    axes[row, 1].axis("off")
+    axes[row, 2].imshow(mask_t.squeeze().numpy(), cmap="gray")
+    axes[row, 2].axis("off")
+
+plt.tight_layout()
+plt.savefig("fig2b_seg_ulcer_examples.png", dpi=150, bbox_inches="tight")
+plt.show()
+
+
+# =========================================================
 # PART 2 — ENTRAÎNEMENT CLASSIFICATION (2 phases)
 # =========================================================
 
@@ -176,7 +304,6 @@ print("CLASSIFICATION TRAINING")
 print("==============================\n")
 
 samples = load_classification(CLASSIFICATION_DATASET)
-print(f"NB SAMPLES : {len(samples)}\n")
 
 train_samples, val_samples, test_samples = split_data(samples)
 
@@ -197,7 +324,7 @@ best_clf_loss  = float("inf")
 phase_boundary = None
 
 # == Phase 1 : warm-up tête ===============================
-print(f"\n  ▶ Phase 1 — Warm-up tête ({EPOCHS_CLF_PHASE1} epochs)")
+print(f"\nPhase 1 — Warm-up tête ({EPOCHS_CLF_PHASE1} epochs)")
 
 optimizer_clf = torch.optim.Adam(
     filter(lambda p: p.requires_grad, clf_model.parameters()), lr=LR_HEAD
@@ -233,13 +360,13 @@ for epoch in range(EPOCHS_CLF_PHASE1):
     if val_loss < best_clf_loss:
         best_clf_loss = val_loss
         torch.save(clf_model.state_dict(), "best_classifier_model.pth")
-        print(" Best classifier saved.")
+        print("Best classifier saved.")
 
-    print(f"  [P1] Epoch {epoch+1}/{EPOCHS_CLF_PHASE1} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_clf.param_groups[0]['lr']:.6f}")
+    print(f"[P1] Epoch {epoch+1}/{EPOCHS_CLF_PHASE1} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_clf.param_groups[0]['lr']:.6f}")
 
 # == Phase 2 : dégel progressif ===========================
 phase_boundary = len(clf_train_losses)
-print(f"\n  ▶ Phase 2 — Fine-tuning ({EPOCHS_CLF_PHASE2} epochs)")
+print(f"\nPhase 2 — Fine-tuning ({EPOCHS_CLF_PHASE2} epochs)")
 
 clf_model.unfreeze_last_layers(n_layers=2)
 
@@ -282,7 +409,7 @@ for epoch in range(EPOCHS_CLF_PHASE2):
         torch.save(clf_model.state_dict(), "best_classifier_model.pth")
         print("Best classifier saved.")
 
-    print(f"  [P2] Epoch {epoch+1}/{EPOCHS_CLF_PHASE2} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
+    print(f"[P2] Epoch {epoch+1}/{EPOCHS_CLF_PHASE2} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
 
 
 # =========================================================
@@ -325,8 +452,7 @@ print(confusion_matrix(all_labels, all_preds))
 
 
 # =========================================================
-# FIGURE 4 — Pipeline final : 4 exemples × 3 colonnes
-#            Original | Segmentation overlay | Classification
+# FIGURE 4 — Pipeline final
 # =========================================================
 print("\n==============================")
 print("FINAL PIPELINE")
@@ -400,4 +526,3 @@ for row, idx in enumerate(indices):
 plt.subplots_adjust(hspace=0.08, wspace=0.05)
 plt.savefig("fig4_pipeline_final.png", dpi=150, bbox_inches="tight")
 plt.show()
-print("Pipeline final → fig4_pipeline_final.png")
