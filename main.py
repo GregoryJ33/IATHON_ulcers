@@ -127,7 +127,7 @@ ax.set_ylabel("Loss")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig("fig1_seg_loss.png", dpi=150)
+plt.savefig("Results/fig1_seg_loss.png", dpi=150)
 plt.show()
 
 
@@ -169,7 +169,7 @@ for row, idx in enumerate(foot_indices):
     axes[row, 2].axis("off")
 
 plt.tight_layout()
-plt.savefig("fig2_seg_examples.png", dpi=150, bbox_inches="tight")
+plt.savefig("Results/fig2_seg_examples.png", dpi=150, bbox_inches="tight")
 plt.show()
 
 
@@ -251,7 +251,7 @@ ax.set_ylabel("Loss")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig("fig1b_seg_finetune_loss.png", dpi=150)
+plt.savefig("Results/fig1b_seg_finetune_loss.png", dpi=150)
 plt.show()
 
 
@@ -291,7 +291,7 @@ for row, idx in enumerate(ulcer_idxs):
     axes[row, 2].axis("off")
 
 plt.tight_layout()
-plt.savefig("fig2b_seg_ulcer_examples.png", dpi=150, bbox_inches="tight")
+plt.savefig("Results/fig2b_seg_ulcer_examples.png", dpi=150, bbox_inches="tight")
 plt.show()
 
 
@@ -426,7 +426,7 @@ ax.set_ylabel("Loss")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig("fig3_clf_loss.png", dpi=150)
+plt.savefig("Results/fig3_clf_loss.png", dpi=150)
 plt.show()
 
 
@@ -512,5 +512,5 @@ for row, idx in enumerate(indices):
     )
 
 plt.subplots_adjust(hspace=0.08, wspace=0.05)
-plt.savefig("fig4_pipeline_final.png", dpi=150, bbox_inches="tight")
+plt.savefig("Results/fig4_pipeline_final.png", dpi=150, bbox_inches="tight")
 plt.show()
