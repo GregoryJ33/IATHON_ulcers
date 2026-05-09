@@ -2,7 +2,7 @@ import os
 import numpy as np
 from PIL import Image
 from sklearn.model_selection import train_test_split
-
+import random
 import torch
 from torch.utils.data import Dataset, WeightedRandomSampler
 from torchvision import transforms
@@ -166,14 +166,59 @@ def split_data(samples):
 
 # =========================
 # LOAD SEGMENTATION DATA
+# (dataset pieds — déjà splitté en train/val par dossier)
 # =========================
 
-def load_segmentation(train_dir):
-    img_dir  = os.path.join(train_dir, "images")
-    mask_dir = os.path.join(train_dir, "labels")
+def load_segmentation(split_dir):
+    """Charge un dossier déjà splitté (train ou validation) du dataset pieds."""
+    img_dir  = os.path.join(split_dir, "images")
+    mask_dir = os.path.join(split_dir, "labels")
     imgs, masks = [], []
     for f in sorted(os.listdir(img_dir)):
         if f.lower().endswith((".png", ".jpg", ".jpeg")):
             imgs.append(os.path.join(img_dir, f))
             masks.append(os.path.join(mask_dir, f))
     return imgs, masks
+
+
+# =========================
+# LOAD + SPLIT ULCÈRE SEG
+# =========================
+
+def load_ulcer_segmentation(data_dir):
+    """
+    Charge le dataset UlcereSegmentation (images/ + labels/).
+    Retourne toutes les paires (image, masque).
+    """
+    img_dir  = os.path.join(data_dir, "images")
+    mask_dir = os.path.join(data_dir, "labels")
+    imgs, masks = [], []
+    for f in sorted(os.listdir(img_dir)):
+        if f.lower().endswith((".png", ".jpg", ".jpeg")):
+            img_path  = os.path.join(img_dir, f)
+            mask_path = os.path.join(mask_dir, f)
+            if os.path.exists(mask_path):
+                imgs.append(img_path)
+                masks.append(mask_path)
+            else:
+                print(f"  [WARN] Masque manquant pour {f}, ignoré.")
+    print(f"  UlcèreSegmentation : {len(imgs)} paires image/masque trouvées")
+    return imgs, masks
+
+
+def split_segmentation(imgs, masks, val_ratio=0.15, seed=42):
+    """
+    Split train/val pour le dataset de segmentation ulcères.
+    Avec seulement ~33 images, on garde 85% en train et 15% en val.
+    Pas de test set ici, l'évaluation visuelle se fait dans le pipeline final.
+    """
+    pairs = list(zip(imgs, masks))
+    random.seed(seed)
+    random.shuffle(pairs)
+    n_val   = max(1, int(len(pairs) * val_ratio))
+    val_p   = pairs[:n_val]
+    train_p = pairs[n_val:]
+    train_imgs,  train_masks  = zip(*train_p) if train_p else ([], [])
+    val_imgs,    val_masks    = zip(*val_p)   if val_p   else ([], [])
+    print(f"  Split ulcère seg → Train: {len(train_imgs)} | Val: {len(val_imgs)}")
+    return list(train_imgs), list(train_masks), list(val_imgs), list(val_masks)
