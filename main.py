@@ -112,7 +112,7 @@ for epoch in range(EPOCHS_SEG):
         torch.save(seg_model.state_dict(), "best_segmentation_model.pth")
         print("Best segmentation model saved.")
 
-    print(f"  Epoch {epoch+1}/{EPOCHS_SEG} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_seg.param_groups[0]['lr']:.6f}")
+    print(f"Epoch {epoch+1}/{EPOCHS_SEG} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_seg.param_groups[0]['lr']:.6f}")
 
 
 # =========================================================
@@ -236,7 +236,7 @@ for epoch in range(EPOCHS_SEG_FINETUNE):
         torch.save(seg_model.state_dict(), "best_segmentation_model.pth")
         print("Best fine-tuned seg model saved.")
 
-    print(f"  [FT] Epoch {epoch+1}/{EPOCHS_SEG_FINETUNE} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_ft.param_groups[0]['lr']:.7f}")
+    print(f"[FT] Epoch {epoch+1}/{EPOCHS_SEG_FINETUNE} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_ft.param_groups[0]['lr']:.7f}")
 
 
 # =========================================================
@@ -256,7 +256,7 @@ plt.show()
 
 
 # =========================================================
-# FIGURE 2bis — Exemples de segmentation sur ulcères (val FT)
+# FIGURE 2bis — Exemples de segmentation sur ulcères
 # =========================================================
 seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
 seg_model.eval()
@@ -453,6 +453,9 @@ print(confusion_matrix(all_labels, all_preds))
 
 # =========================================================
 # FIGURE 4 — Pipeline final
+# Test set de CLASSIFICATION uniquement (aucune image vue
+# pendant l'entraînement de la segmentation → pas de biais)
+# 2 colonnes : Original + label vrai | Seg overlay + prédit
 # =========================================================
 print("\n==============================")
 print("FINAL PIPELINE")
@@ -460,65 +463,50 @@ print("==============================\n")
 
 seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
 seg_model.eval()
+clf_model.load_state_dict(torch.load("best_classifier_model.pth"))
+clf_model.eval()
 
-n_rows   = 4
-indices  = random.sample(range(len(test_ds)), min(n_rows, len(test_ds)))
+n_rows  = 4
+indices = random.sample(range(len(test_ds)), min(n_rows, len(test_ds)))
 
-fig, axes = plt.subplots(n_rows, 3, figsize=(10, 3.2 * n_rows))
+fig, axes = plt.subplots(n_rows, 2, figsize=(7, 3.4 * n_rows))
 fig.suptitle("Pipeline Final", fontsize=13, fontweight="bold", y=1.01)
 
-# Titres colonnes (une seule fois, ligne 0)
-axes[0, 0].set_title("Original",              fontsize=9, pad=6)
-axes[0, 1].set_title("Segmentation (overlay)", fontsize=9, pad=6)
-axes[0, 2].set_title("Classification",         fontsize=9, pad=6)
+axes[0, 0].set_title("Image originale",               fontsize=9, pad=6)
+axes[0, 1].set_title("Segmentation + Classification", fontsize=9, pad=6)
 
 for row, idx in enumerate(indices):
     image, true_label, _ = test_ds[idx]
-    inp = image.unsqueeze(0).to(DEVICE)
+    inp    = image.unsqueeze(0).to(DEVICE)
+    img_np = denormalize(image)
 
-    # Segmentation
     with torch.no_grad():
         prob = torch.sigmoid(seg_model(inp)).squeeze().cpu().numpy()
-
-    # Classification
-    with torch.no_grad():
         probs      = F.softmax(clf_model(inp), dim=1)[0]
         pred_class = torch.argmax(probs).item()
         confidence = probs[pred_class].item() * 100
 
-    img_np     = denormalize(image)
     is_correct = pred_class == true_label
+    fc_color   = "#2e7d32" if is_correct else "#c62828"
 
-    # == Col 0 : image originale ==========================
+    # -- Col 0 : original + vrai label --------------------
     axes[row, 0].imshow(img_np)
     axes[row, 0].axis("off")
-    # Label vrai en bas de l'image
     axes[row, 0].text(
-        0.5, 0.03, CLASS_NAMES[true_label],
+        0.5, 0.03, f"Vrai : {CLASS_NAMES[true_label]}",
         transform=axes[row, 0].transAxes,
         ha="center", va="bottom", fontsize=8, color="white",
-        bbox=dict(boxstyle="round,pad=0.2", fc="#37474F", alpha=0.8, lw=0)
+        bbox=dict(boxstyle="round,pad=0.2", fc="#37474F", alpha=0.82, lw=0)
     )
 
-    # == Col 1 : segmentation overlay =====================
+    # -- Col 1 : seg overlay + classe prédite -------------
     axes[row, 1].imshow(img_np)
     axes[row, 1].imshow(prob, cmap="hot", alpha=0.45, vmin=0, vmax=1)
     axes[row, 1].axis("off")
-
-    # == Col 2 : classification ============================
-    fc_color = "#2e7d32" if is_correct else "#c62828"
-    axes[row, 2].imshow(img_np)
-    axes[row, 2].axis("off")
-    # Prédiction en bas, confiance en dessous
-    axes[row, 2].text(
-        0.5, 0.10, f"{confidence:.0f}%",
-        transform=axes[row, 2].transAxes,
-        ha="center", va="bottom", fontsize=8, color="white",
-        bbox=dict(boxstyle="round,pad=0.2", fc="#555555", alpha=0.75, lw=0)
-    )
-    axes[row, 2].text(
-        0.5, 0.03, CLASS_NAMES[pred_class],
-        transform=axes[row, 2].transAxes,
+    axes[row, 1].text(
+        0.5, 0.03,
+        f"Prédit : {CLASS_NAMES[pred_class]}  ({confidence:.0f}%)",
+        transform=axes[row, 1].transAxes,
         ha="center", va="bottom", fontsize=8, fontweight="bold", color="white",
         bbox=dict(boxstyle="round,pad=0.2", fc=fc_color, alpha=0.85, lw=0)
     )
