@@ -109,7 +109,7 @@ for epoch in range(EPOCHS_SEG):
 
     if val_loss < best_seg_loss:
         best_seg_loss = val_loss
-        torch.save(seg_model.state_dict(), "best_segmentation_model.pth")
+        torch.save(seg_model.state_dict(), "Checkpoints/best_segmentation_model.pth")
         print("Best segmentation model saved.")
 
     print(f"Epoch {epoch+1}/{EPOCHS_SEG} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_seg.param_groups[0]['lr']:.6f}")
@@ -127,14 +127,14 @@ ax.set_ylabel("Loss")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig("Results/fig1_seg_loss.png", dpi=150)
+plt.savefig("Results2/fig1_seg_loss.png", dpi=150)
 plt.show()
 
 
 # =========================================================
 # FIGURE 2 — Exemples de segmentation sur les pieds
 # =========================================================
-seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
+seg_model.load_state_dict(torch.load("Checkpoints/best_segmentation_model.pth"))
 seg_model.eval()
 
 n_foot = 3
@@ -169,7 +169,7 @@ for row, idx in enumerate(foot_indices):
     axes[row, 2].axis("off")
 
 plt.tight_layout()
-plt.savefig("Results/fig2_seg_examples.png", dpi=150, bbox_inches="tight")
+plt.savefig("Results2/fig2_seg_examples.png", dpi=150, bbox_inches="tight")
 plt.show()
 
 
@@ -194,7 +194,7 @@ ft_train_loader = DataLoader(ft_train_ds, batch_size=ft_batch, shuffle=True)
 ft_val_loader   = DataLoader(ft_val_ds,   batch_size=ft_batch)
 
 # Repart du meilleur checkpoint pieds
-seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
+seg_model.load_state_dict(torch.load("Checkpoints/best_segmentation_model.pth"))
 
 # lr très faible pour ne pas effacer ce qui a été appris sur les pieds
 optimizer_ft = torch.optim.Adam(seg_model.parameters(), lr=LR_SEG_FINETUNE)
@@ -233,7 +233,7 @@ for epoch in range(EPOCHS_SEG_FINETUNE):
 
     if val_loss < best_ft_loss:
         best_ft_loss = val_loss
-        torch.save(seg_model.state_dict(), "best_segmentation_model.pth")
+        torch.save(seg_model.state_dict(), "Checkpoints/best_segmentation_model.pth")
         print("Best fine-tuned seg model saved.")
 
     print(f"[FT] Epoch {epoch+1}/{EPOCHS_SEG_FINETUNE} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_ft.param_groups[0]['lr']:.7f}")
@@ -251,14 +251,14 @@ ax.set_ylabel("Loss")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig("Results/fig1b_seg_finetune_loss.png", dpi=150)
+plt.savefig("Results2/fig1b_seg_finetune_loss.png", dpi=150)
 plt.show()
 
 
 # =========================================================
 # FIGURE 2bis — Exemples de segmentation sur ulcères
 # =========================================================
-seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
+seg_model.load_state_dict(torch.load("Checkpoints/best_segmentation_model.pth"))
 seg_model.eval()
 
 n_ulcer_ex = min(3, len(ft_val_ds))
@@ -291,7 +291,7 @@ for row, idx in enumerate(ulcer_idxs):
     axes[row, 2].axis("off")
 
 plt.tight_layout()
-plt.savefig("Results/fig2b_seg_ulcer_examples.png", dpi=150, bbox_inches="tight")
+plt.savefig("Results2/fig2b_seg_ulcer_examples.png", dpi=150, bbox_inches="tight")
 plt.show()
 
 
@@ -359,7 +359,7 @@ for epoch in range(EPOCHS_CLF_PHASE1):
 
     if val_loss < best_clf_loss:
         best_clf_loss = val_loss
-        torch.save(clf_model.state_dict(), "best_classifier_model.pth")
+        torch.save(clf_model.state_dict(), "Checkpoints/best_classifier_model.pth")
         print("Best classifier saved.")
 
     print(f"[P1] Epoch {epoch+1}/{EPOCHS_CLF_PHASE1} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_clf.param_groups[0]['lr']:.6f}")
@@ -406,7 +406,7 @@ for epoch in range(EPOCHS_CLF_PHASE2):
 
     if val_loss < best_clf_loss:
         best_clf_loss = val_loss
-        torch.save(clf_model.state_dict(), "best_classifier_model.pth")
+        torch.save(clf_model.state_dict(), "Checkpoints/best_classifier_model.pth")
         print("Best classifier saved.")
 
     print(f"[P2] Epoch {epoch+1}/{EPOCHS_CLF_PHASE2} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
@@ -426,7 +426,7 @@ ax.set_ylabel("Loss")
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
-plt.savefig("Results/fig3_clf_loss.png", dpi=150)
+plt.savefig("Results2/fig3_clf_loss.png", dpi=150)
 plt.show()
 
 
@@ -434,7 +434,7 @@ plt.show()
 # ÉVALUATION SUR LE TEST SET (console)
 # =========================================================
 
-clf_model.load_state_dict(torch.load("best_classifier_model.pth"))
+clf_model.load_state_dict(torch.load("Checkpoints/best_classifier_model.pth"))
 clf_model.eval()
 
 all_preds, all_labels = [], []
@@ -461,9 +461,9 @@ print("\n==============================")
 print("FINAL PIPELINE")
 print("==============================\n")
 
-seg_model.load_state_dict(torch.load("best_segmentation_model.pth"))
+seg_model.load_state_dict(torch.load("Checkpoints/best_segmentation_model.pth"))
 seg_model.eval()
-clf_model.load_state_dict(torch.load("best_classifier_model.pth"))
+clf_model.load_state_dict(torch.load("Checkpoints/best_classifier_model.pth"))
 clf_model.eval()
 
 n_rows  = 4
@@ -512,5 +512,5 @@ for row, idx in enumerate(indices):
     )
 
 plt.subplots_adjust(hspace=0.08, wspace=0.05)
-plt.savefig("Results/fig4_pipeline_final.png", dpi=150, bbox_inches="tight")
+plt.savefig("Results2/fig4_pipeline_final.png", dpi=150, bbox_inches="tight")
 plt.show()
