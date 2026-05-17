@@ -136,40 +136,11 @@ def load_classification(data_dir):
                 samples.append((os.path.join(folder, f), cls))
     return samples
 
-def load_classification2(data_dir):
-    samples = []
-
-    print("\n=== DEBUG DATASET ===")
-    print("data_dir:", data_dir)
-    print("abs:", os.path.abspath(data_dir))
-    print("folders:", os.listdir(data_dir))
-
-    for cls in os.listdir(data_dir):
-        folder = os.path.join(data_dir, cls)
-
-        if not os.path.isdir(folder):
-            continue
-
-        print(f"\nCLASS FOUND: {cls}")
-        print("folder:", folder)
-
-        n = 0
-        for root, _, files in os.walk(folder):
-            for f in files:
-                if f.lower().endswith((".png", ".jpg", ".jpeg")):
-                    samples.append((os.path.join(root, f), cls))
-                    n += 1
-
-        print("images:", n)
-
-    print("\nTOTAL SAMPLES:", len(samples))
-    return samples
-
 # =========================
 # SPLIT (stratifié sklearn)
 # =========================
 
-def split_data2(samples):
+def split_data(samples):
     """
     Split stratifié 70 / 10 / 20 (train / val / test).
     Stratification sur la classe pour préserver les proportions
@@ -189,38 +160,6 @@ def split_data2(samples):
     )
 
     print(f"Split -> Train: {len(train)} | Val: {len(val)} | Test: {len(test)}")
-    return train, val, test
-
-from collections import Counter
-
-def split_data(samples):
-
-    labels = [y for _, y in samples]
-
-    print("\n===== DISTRIBUTION DES CLASSES =====")
-    counts = Counter(labels)
-
-    for cls in CLASS_NAMES:
-        print(f"{cls:<15} : {counts[cls]}")
-
-    train, test = train_test_split(
-        samples,
-        test_size=0.2,
-        stratify=labels,
-        random_state=42
-    )
-
-    train_labels = [y for _, y in train]
-
-    train, val = train_test_split(
-        train,
-        test_size=0.125,
-        stratify=train_labels,
-        random_state=42
-    )
-
-    print(f"\nSplit -> Train: {len(train)} | Val: {len(val)} | Test: {len(test)}")
-
     return train, val, test
 
 
