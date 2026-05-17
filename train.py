@@ -236,8 +236,8 @@ for epoch in range(EPOCHS_SEG_FINETUNE):
             running_dice += smp.metrics.f1_score(*smp.metrics.get_stats(out > SEG_THRESHOLD, masks.long(), mode="binary"), reduction="micro")
             running_iou += smp.metrics.iou_score(*smp.metrics.get_stats(out > SEG_THRESHOLD, masks.long(), mode="binary"), reduction="micro")
     val_loss = running_val / len(ft_val_loader)
-    val_dice = running_dice / len(seg_val_loader)
-    val_iou = running_iou / len(seg_val_loader)
+    val_dice = running_dice / len(ft_val_loader)
+    val_iou = running_iou / len(ft_val_loader)
 
     scheduler_ft.step(val_loss)
     ft_train_losses.append(train_loss)
