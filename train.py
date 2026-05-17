@@ -226,12 +226,18 @@ for epoch in range(EPOCHS_SEG_FINETUNE):
 
     seg_model.eval()
     running_val = 0
+    running_dice = 0
+    running_iou = 0
     with torch.no_grad():
         for images, masks in ft_val_loader:
             images, masks = images.to(DEVICE), masks.to(DEVICE)
             out = seg_model(images)
             running_val += (0.5 * bce_loss(out, masks) + 0.5 * dice_loss(out, masks)).item()
+            running_dice += smp.metrics.f1_score(*smp.metrics.get_stats(out > SEG_THRESHOLD, masks.long(), mode="binary"), reduction="micro")
+            running_iou += smp.metrics.iou_score(*smp.metrics.get_stats(out > SEG_THRESHOLD, masks.long(), mode="binary"), reduction="micro")
     val_loss = running_val / len(ft_val_loader)
+    val_dice = running_dice / len(seg_val_loader)
+    val_iou = running_iou / len(seg_val_loader)
 
     scheduler_ft.step(val_loss)
     ft_train_losses.append(train_loss)
@@ -242,7 +248,7 @@ for epoch in range(EPOCHS_SEG_FINETUNE):
         torch.save(seg_model.state_dict(), "Checkpoints/best_segmentation_model.pth")
         print("Best fine-tuned seg model saved.")
 
-    print(f"[FT] Epoch {epoch+1}/{EPOCHS_SEG_FINETUNE} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | LR: {optimizer_ft.param_groups[0]['lr']:.7f}")
+    print(f"[FT] Epoch {epoch+1}/{EPOCHS_SEG_FINETUNE} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | Val dice: {val_dice:.4f} | Val iou: {val_iou:.4f} | LR: {optimizer_ft.param_groups[0]['lr']:.7f}")
 
 
 # =========================================================
